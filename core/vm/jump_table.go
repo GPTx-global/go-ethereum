@@ -55,6 +55,7 @@ var (
 	BerlinInstructionSet           = newBerlinInstructionSet()
 	LondonInstructionSet           = newLondonInstructionSet()
 	MergeInstructionSet            = newMergeInstructionSet()
+	ShanghaiInstructionSet         = newShanghaiInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -63,6 +64,8 @@ type JumpTable [256]*operation
 // DefaultJumpTable defines the default jump table used by the EVM interpreter.
 func DefaultJumpTable(rules params.Rules) (jumpTable *JumpTable) {
 	switch {
+	case rules.IsShanghai:
+		jumpTable = &ShanghaiInstructionSet
 	case rules.IsMerge:
 		jumpTable = &MergeInstructionSet
 	case rules.IsLondon:
@@ -115,6 +118,14 @@ func (jt JumpTable) MustValidate() {
 	if err := jt.Validate(); err != nil {
 		panic(err)
 	}
+}
+
+func newShanghaiInstructionSet() JumpTable {
+	instructionSet := newMergeInstructionSet()
+	enable3855(&instructionSet) // EIP-3855: Shanghai Gas Changes https://eips.ethereum.org/EIPS/eip-3855
+	enable3860(&instructionSet) // Limit and meter initcode
+	instructionSet.MustValidate()
+	return instructionSet
 }
 
 func newMergeInstructionSet() JumpTable {
