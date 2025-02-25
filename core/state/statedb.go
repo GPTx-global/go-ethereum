@@ -100,6 +100,9 @@ type StateDB struct {
 	// Per-transaction access list
 	accessList *accessList
 
+	// Transient storage
+	transientStorage transientStorage
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        *journal
@@ -143,6 +146,7 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		preimages:           make(map[common.Hash][]byte),
 		journal:             newJournal(),
 		accessList:          newAccessList(),
+		transientStorage:    newTransientStorage(),
 		hasher:              crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
@@ -704,6 +708,7 @@ func (s *StateDB) Copy() *StateDB {
 	// However, it doesn't cost us much to copy an empty list, so we do it anyway
 	// to not blow up if we ever decide copy it in the middle of a transaction
 	state.accessList = s.accessList.Copy()
+	state.transientStorage = s.transientStorage.Copy()
 
 	// If there's a prefetcher running, make an inactive copy of it that can
 	// only access data but does not actively preload (since the user will not
@@ -1018,6 +1023,10 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 			s.AddSlotToAccessList(el.Address, key)
 		}
 	}
+
+	// Reset transient storage at the beginning of transaction execution
+	s.transientStorage = newTransientStorage()
+
 }
 
 // AddAddressToAccessList adds the given address to the access list
@@ -1053,4 +1062,33 @@ func (s *StateDB) AddressInAccessList(addr common.Address) bool {
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	return s.accessList.Contains(addr, slot)
+}
+
+// SetTransientState sets transient storage for a given account. It
+// adds the change to the journal so that it can be rolled back
+// to its previous value if there is a revert.
+func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash) {
+	prev := s.GetTransientState(addr, key)
+	if prev == value {
+		return
+	}
+
+	s.journal.append(transientStorageChange{
+		account:  &addr,
+		key:      key,
+		prevalue: prev,
+	})
+
+	s.setTransientState(addr, key, value)
+}
+
+// setTransientState is a lower level setter for transient storage. It
+// is called during a revert to prevent modifications to the journal.
+func (s *StateDB) setTransientState(addr common.Address, key, value common.Hash) {
+	s.transientStorage.Set(addr, key, value)
+}
+
+// GetTransientState gets transient storage for a given account.
+func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
+	return s.transientStorage.Get(addr, key)
 }
