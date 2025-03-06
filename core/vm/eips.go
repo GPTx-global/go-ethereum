@@ -200,7 +200,6 @@ func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 // - Adds TLOAD that reads from transient storage
 // - Adds TSTORE that writes to transient storage
 func enable1153(jt *JumpTable) {
-	fmt.Println("Enabling EIP-1153: Transient Storage")
 	jt[TLOAD] = &operation{
 		execute:     opTload,
 		constantGas: params.WarmStorageReadCostEIP2929,
