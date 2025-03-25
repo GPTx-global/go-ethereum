@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -34,7 +33,11 @@ import (
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
+func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+	// Short circuit if the trie is already committed and not usable.
+	if t.committed {
+		return ErrCommitted
+	}
 	// Collect all nodes on the path to key.
 	var (
 		prefix []byte
@@ -60,12 +63,20 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 			key = key[1:]
 			nodes = append(nodes, n)
 		case hashNode:
-			var err error
-			tn, err = t.resolveHash(n, prefix)
+			// Retrieve the specified node from the underlying node reader.
+			// trie.resolveAndTrack is not used since in that function the
+			// loaded blob will be tracked, while it's not required here since
+			// all loaded nodes won't be linked to trie at all and track nodes
+			// may lead to out-of-memory issue.
+			blob, err := t.reader.node(prefix, common.BytesToHash(n))
 			if err != nil {
-				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+				log.Error("Unhandled trie error in Trie.Prove", "err", err)
 				return err
 			}
+			// The raw-blob format nodes are loaded either from the
+			// clean cache or the database, they are all in their own
+			// copy and safe to use unsafe decoder.
+			tn = mustDecodeNodeUnsafe(n, blob)
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -74,10 +85,6 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 	defer returnHasherToPool(hasher)
 
 	for i, n := range nodes {
-		if fromLevel > 0 {
-			fromLevel--
-			continue
-		}
 		var hn node
 		n, hn = hasher.proofHash(n)
 		if hash, ok := hn.(hashNode); ok || i == 0 {
@@ -100,8 +107,8 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) e
 // If the trie does not contain a value for key, the returned proof contains all
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
-func (t *StateTrie) Prove(key []byte, fromLevel uint, proofDb ethdb.KeyValueWriter) error {
-	return t.trie.Prove(key, fromLevel, proofDb)
+func (t *StateTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
+	return t.trie.Prove(key, proofDb)
 }
 
 // VerifyProof checks merkle proofs. The given proof must contain the value for
@@ -369,7 +376,7 @@ func unset(parent node, child node, key []byte, pos int, removeLeft bool) error 
 			if removeLeft {
 				if bytes.Compare(cld.Key, key[pos:]) < 0 {
 					// The key of fork shortnode is less than the path
-					// (it belongs to the range), unset the entrie
+					// (it belongs to the range), unset the entire
 					// branch. The parent must be a fullnode.
 					fn := parent.(*fullNode)
 					fn.Children[key[pos-1]] = nil
@@ -494,7 +501,7 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if proof == nil {
 		tr := NewStackTrie(nil)
 		for index, key := range keys {
-			tr.TryUpdate(key, values[index])
+			tr.Update(key, values[index])
 		}
 		if have, want := tr.Hash(), rootHash; have != want {
 			return false, fmt.Errorf("invalid proof, want hash %x, got %x", want, have)
@@ -559,12 +566,12 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	}
 	// Rebuild the trie with the leaf stream, the shape of trie
 	// should be same with the original one.
-	tr := &Trie{root: root, db: NewDatabase(rawdb.NewMemoryDatabase())}
+	tr := &Trie{root: root, reader: newEmptyReader(), tracer: newTracer()}
 	if empty {
 		tr.root = nil
 	}
 	for index, key := range keys {
-		tr.TryUpdate(key, values[index])
+		tr.Update(key, values[index])
 	}
 	if tr.Hash() != rootHash {
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())

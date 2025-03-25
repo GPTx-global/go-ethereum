@@ -19,6 +19,7 @@ package ethtest
 import (
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -76,7 +77,7 @@ func (c *Chain) RootAt(height int) common.Hash {
 
 // ForkID gets the fork id of the chain.
 func (c *Chain) ForkID() forkid.ID {
-	return forkid.NewID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()))
+	return forkid.NewID(c.chainConfig, c.blocks[0].Hash(), uint64(c.Len()), c.blocks[0].Time())
 }
 
 // Shorten returns a copy chain of a desired height from the imported
@@ -98,7 +99,7 @@ func (c *Chain) Head() *types.Block {
 
 func (c *Chain) GetHeaders(req *GetBlockHeaders) ([]*types.Header, error) {
 	if req.Amount < 1 {
-		return nil, fmt.Errorf("no block headers requested")
+		return nil, errors.New("no block headers requested")
 	}
 
 	headers := make([]*types.Header, req.Amount)
@@ -176,7 +177,7 @@ func blocksFromFile(chainfile string, gblock *types.Block) ([]*types.Block, erro
 		}
 	}
 	stream := rlp.NewStream(reader, 0)
-	blocks := make([]*types.Block, 1)
+	var blocks = make([]*types.Block, 1)
 	blocks[0] = gblock
 	for i := 0; ; i++ {
 		var b types.Block

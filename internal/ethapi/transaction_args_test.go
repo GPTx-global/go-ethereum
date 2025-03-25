@@ -18,7 +18,7 @@ package ethapi
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math/big"
 	"reflect"
 	"testing"
@@ -138,28 +138,28 @@ func TestSetFeeDefaults(t *testing.T) {
 			false,
 			&TransactionArgs{MaxFeePerGas: maxFee},
 			nil,
-			fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx pre-London, priorityFee set",
 			false,
 			&TransactionArgs{MaxPriorityFeePerGas: fortytwo},
 			nil,
-			fmt.Errorf("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
+			errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee",
 			true,
 			&TransactionArgs{MaxFeePerGas: maxFee, MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1000))},
 			nil,
-			fmt.Errorf("maxFeePerGas (0x3e) < maxPriorityFeePerGas (0x3e8)"),
+			errors.New("maxFeePerGas (0x3e) < maxPriorityFeePerGas (0x3e8)"),
 		},
 		{
 			"dynamic fee tx, maxFee < priorityFee while setting default",
 			true,
 			&TransactionArgs{MaxFeePerGas: (*hexutil.Big)(big.NewInt(7))},
 			nil,
-			fmt.Errorf("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
+			errors.New("maxFeePerGas (0x7) < maxPriorityFeePerGas (0x2a)"),
 		},
 
 		// Misc
@@ -168,21 +168,21 @@ func TestSetFeeDefaults(t *testing.T) {
 			false,
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee, MaxPriorityFeePerGas: fortytwo},
 			nil,
-			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxPriorityFee",
 			false,
 			&TransactionArgs{GasPrice: fortytwo, MaxPriorityFeePerGas: fortytwo},
 			nil,
-			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
 			"set gas price and maxFee",
 			true,
 			&TransactionArgs{GasPrice: fortytwo, MaxFeePerGas: maxFee},
 			nil,
-			fmt.Errorf("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
+			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 	}
 
@@ -250,7 +250,6 @@ func (b *backendMock) activateLondon() {
 func (b *backendMock) deactivateLondon() {
 	b.current.Number = big.NewInt(900)
 }
-
 func (b *backendMock) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return big.NewInt(42), nil
 }
@@ -259,8 +258,7 @@ func (b *backendMock) ChainConfig() *params.ChainConfig { return b.config }
 
 // Other methods needed to implement Backend interface.
 func (b *backendMock) SyncProgress() ethereum.SyncProgress { return ethereum.SyncProgress{} }
-
-func (b *backendMock) FeeHistory(ctx context.Context, blockCount int, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
+func (b *backendMock) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, error) {
 	return nil, nil, nil, nil, nil
 }
 func (b *backendMock) ChainDb() ethdb.Database           { return nil }
@@ -274,31 +272,28 @@ func (b *backendMock) SetHead(number uint64)             {}
 func (b *backendMock) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
 	return nil, nil
 }
-
 func (b *backendMock) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	return nil, nil
 }
-
 func (b *backendMock) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Header, error) {
 	return nil, nil
 }
-func (b *backendMock) CurrentBlock() *types.Block { return nil }
+func (b *backendMock) CurrentBlock() *types.Header { return nil }
 func (b *backendMock) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	return nil, nil
 }
-
 func (b *backendMock) BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return nil, nil
 }
-
 func (b *backendMock) BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error) {
 	return nil, nil
 }
-
+func (b *backendMock) GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error) {
+	return nil, nil
+}
 func (b *backendMock) StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
-
 func (b *backendMock) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
 	return nil, nil, nil
 }
@@ -306,19 +301,17 @@ func (b *backendMock) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 func (b *backendMock) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
 	return nil, nil
 }
-
 func (b *backendMock) GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error) {
 	return nil, nil
 }
 func (b *backendMock) GetTd(ctx context.Context, hash common.Hash) *big.Int { return nil }
-func (b *backendMock) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
-	return nil, nil, nil
+func (b *backendMock) GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) (*vm.EVM, func() error) {
+	return nil, nil
 }
 func (b *backendMock) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription { return nil }
 func (b *backendMock) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return nil
 }
-
 func (b *backendMock) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	return nil
 }
@@ -332,11 +325,10 @@ func (b *backendMock) GetPoolNonce(ctx context.Context, addr common.Address) (ui
 	return 0, nil
 }
 func (b *backendMock) Stats() (pending int, queued int) { return 0, 0 }
-func (b *backendMock) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
+func (b *backendMock) TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction) {
 	return nil, nil
 }
-
-func (b *backendMock) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+func (b *backendMock) TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction) {
 	return nil, nil
 }
 func (b *backendMock) SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription      { return nil }
@@ -346,7 +338,6 @@ func (b *backendMock) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (b *backendMock) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return nil
 }
-
 func (b *backendMock) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return nil
 }

@@ -99,8 +99,8 @@ const (
 	P1DeriveKeyFromCurrent = uint8(0x10)
 	statusP1WalletStatus   = uint8(0x00)
 	statusP1Path           = uint8(0x01)
-	signP1PrecomputedHash  = uint8(0x01)
-	signP2OnlyBlock        = uint8(0x81)
+	signP1PrecomputedHash  = uint8(0x00)
+	signP2OnlyBlock        = uint8(0x00)
 	exportP1Any            = uint8(0x00)
 	exportP2Pubkey         = uint8(0x01)
 )
@@ -252,7 +252,7 @@ func (w *Wallet) release() error {
 // with the wallet.
 func (w *Wallet) pair(puk []byte) error {
 	if w.session.paired() {
-		return fmt.Errorf("wallet already paired")
+		return errors.New("wallet already paired")
 	}
 	pairing, err := w.session.pair(puk)
 	if err != nil {
@@ -813,7 +813,7 @@ func (s *Session) pair(secret []byte) (smartcardPairing, error) {
 // unpair deletes an existing pairing.
 func (s *Session) unpair() error {
 	if !s.verified {
-		return fmt.Errorf("unpair requires that the PIN be verified")
+		return errors.New("unpair requires that the PIN be verified")
 	}
 	return s.Channel.Unpair()
 }
@@ -907,7 +907,7 @@ func (s *Session) initialize(seed []byte) error {
 		return err
 	}
 	if status == "Online" {
-		return fmt.Errorf("card is already initialized, cowardly refusing to proceed")
+		return errors.New("card is already initialized, cowardly refusing to proceed")
 	}
 
 	s.Wallet.lock.Lock()

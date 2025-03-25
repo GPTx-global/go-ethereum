@@ -26,7 +26,10 @@ import (
 )
 
 var activators = map[int]func(*JumpTable){
+	5656: enable5656,
+	6780: enable6780,
 	3855: enable3855,
+	3860: enable3860,
 	3529: enable3529,
 	3198: enable3198,
 	2929: enable2929,
@@ -52,7 +55,6 @@ func ValidEip(eipNum int) bool {
 	_, ok := activators[eipNum]
 	return ok
 }
-
 func ActivateableEips() []string {
 	var nums []string
 	for k := range activators {
@@ -172,30 +174,6 @@ func enable3198(jt *JumpTable) {
 	}
 }
 
-// opBaseFee implements BASEFEE opcode
-func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
-	scope.Stack.Push(baseFee)
-	return nil, nil
-}
-
-// enable3855 applies EIP-3855 (PUSH0 opcode)
-func enable3855(jt *JumpTable) {
-	// New opcode
-	jt[PUSH0] = &operation{
-		execute:     opPush0,
-		constantGas: GasQuickStep,
-		minStack:    minStack(0, 1),
-		maxStack:    maxStack(0, 1),
-	}
-}
-
-// opPush0 implements the PUSH0 opcode
-func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
-	scope.Stack.Push(new(uint256.Int))
-	return nil, nil
-}
-
 // enable1153 applies EIP-1153 "Transient Storage"
 // - Adds TLOAD that reads from transient storage
 // - Adds TSTORE that writes to transient storage
@@ -235,7 +213,31 @@ func opTstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]b
 	return nil, nil
 }
 
-// ebnable3860 enables "EIP-3860: Limit and meter initcode"
+// opBaseFee implements BASEFEE opcode
+func opBaseFee(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(interpreter.evm.Context.BaseFee)
+	scope.Stack.Push(baseFee)
+	return nil, nil
+}
+
+// enable3855 applies EIP-3855 (PUSH0 opcode)
+func enable3855(jt *JumpTable) {
+	// New opcode
+	jt[PUSH0] = &operation{
+		execute:     opPush0,
+		constantGas: GasQuickStep,
+		minStack:    minStack(0, 1),
+		maxStack:    maxStack(0, 1),
+	}
+}
+
+// opPush0 implements the PUSH0 opcode
+func opPush0(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	scope.Stack.Push(new(uint256.Int))
+	return nil, nil
+}
+
+// enable3860 enables "EIP-3860: Limit and meter initcode"
 // https://eips.ethereum.org/EIPS/eip-3860
 func enable3860(jt *JumpTable) {
 	jt[CREATE].dynamicGas = gasCreateEip3860
@@ -266,4 +268,38 @@ func opMcopy(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]by
 	// (the memorySize function on the opcode).
 	scope.Memory.Copy(dst.Uint64(), src.Uint64(), length.Uint64())
 	return nil, nil
+}
+
+// opBlobHash implements the BLOBHASH opcode
+func opBlobHash(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	index := scope.Stack.Peek()
+	if index.LtUint64(uint64(len(interpreter.evm.TxContext.BlobHashes))) {
+		blobHash := interpreter.evm.TxContext.BlobHashes[index.Uint64()]
+		index.SetBytes32(blobHash[:])
+	} else {
+		index.Clear()
+	}
+	return nil, nil
+}
+
+// enable4844 applies EIP-4844 (DATAHASH opcode)
+func enable4844(jt *JumpTable) {
+	// New opcode
+	jt[BLOBHASH] = &operation{
+		execute:     opBlobHash,
+		constantGas: GasFastestStep,
+		minStack:    minStack(1, 1),
+		maxStack:    maxStack(1, 1),
+	}
+}
+
+// enable6780 applies EIP-6780 (deactivate SELFDESTRUCT)
+func enable6780(jt *JumpTable) {
+	jt[SELFDESTRUCT] = &operation{
+		execute:     opSelfdestruct6780,
+		dynamicGas:  gasSelfdestructEIP3529,
+		constantGas: params.SelfdestructGasEIP150,
+		minStack:    minStack(1, 0),
+		maxStack:    maxStack(1, 0),
+	}
 }

@@ -70,14 +70,14 @@ func checkInput(id byte, inputLen int) bool {
 	panic("programmer error")
 }
 
-// The fuzzer functions must return
-// 1 if the fuzzer should increase priority of the
+// The function must return
 //
-//	given input during subsequent fuzzing (for example, the input is lexically
-//	correct and was parsed successfully);
+//   - 1 if the fuzzer should increase priority of the
+//     given input during subsequent fuzzing (for example, the input is lexically
+//     correct and was parsed successfully);
+//   - -1 if the input must not be added to corpus even if gives new coverage; and
+//   - 0 otherwise
 //
-// -1 if the input must not be added to corpus even if gives new coverage; and
-// 0  otherwise
 // other values are reserved for future use.
 func fuzz(id byte, data []byte) int {
 	// Even on bad input, it should not crash, so we still test the gas calc
@@ -92,9 +92,7 @@ func fuzz(id byte, data []byte) int {
 	}
 	cpy := make([]byte, len(data))
 	copy(cpy, data)
-	contract := vm.NewPrecompile(vm.AccountRef(common.Address{}), precompile, common.Big0, gas)
-	contract.Input = cpy
-	_, err := precompile.Run(nil, contract, false)
+	_, err := precompile.Run(cpy)
 	if !bytes.Equal(cpy, data) {
 		panic(fmt.Sprintf("input data modified, precompile %d: %x %x", id, data, cpy))
 	}

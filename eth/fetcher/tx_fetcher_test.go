@@ -25,7 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -45,30 +45,24 @@ type doTxNotify struct {
 	peer   string
 	hashes []common.Hash
 }
-
 type doTxEnqueue struct {
 	peer   string
 	txs    []*types.Transaction
 	direct bool
 }
-
 type doWait struct {
 	time time.Duration
 	step bool
 }
-type (
-	doDrop string
-	doFunc func()
-)
+type doDrop string
+type doFunc func()
 
-type (
-	isWaiting   map[string][]common.Hash
-	isScheduled struct {
-		tracking map[string][]common.Hash
-		fetching map[string][]common.Hash
-		dangling map[string][]common.Hash
-	}
-)
+type isWaiting map[string][]common.Hash
+type isScheduled struct {
+	tracking map[string][]common.Hash
+	fetching map[string][]common.Hash
+	dangling map[string][]common.Hash
+}
 type isUnderpriced int
 
 // txFetcherTest represents a test scenario that can be executed by the test
@@ -384,7 +378,7 @@ func TestTransactionFetcherCleanup(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -423,7 +417,7 @@ func TestTransactionFetcherCleanupEmpty(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -461,7 +455,7 @@ func TestTransactionFetcherMissingRescheduling(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -507,7 +501,7 @@ func TestTransactionFetcherMissingCleanup(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -545,7 +539,7 @@ func TestTransactionFetcherBroadcasts(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -650,7 +644,7 @@ func TestTransactionFetcherTimeoutRescheduling(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -871,13 +865,13 @@ func TestTransactionFetcherUnderpricedDedup(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
 						if i%2 == 0 {
-							errs[i] = core.ErrUnderpriced
+							errs[i] = txpool.ErrUnderpriced
 						} else {
-							errs[i] = core.ErrReplaceUnderpriced
+							errs[i] = txpool.ErrReplaceUnderpriced
 						}
 					}
 					return errs
@@ -944,10 +938,10 @@ func TestTransactionFetcherUnderpricedDoSProtection(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					errs := make([]error, len(txs))
 					for i := 0; i < len(errs); i++ {
-						errs[i] = core.ErrUnderpriced
+						errs[i] = txpool.ErrUnderpriced
 					}
 					return errs
 				},
@@ -970,7 +964,7 @@ func TestTransactionFetcherOutOfBoundDeliveries(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1023,7 +1017,7 @@ func TestTransactionFetcherDrop(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1089,7 +1083,7 @@ func TestTransactionFetcherDropRescheduling(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1134,7 +1128,7 @@ func TestTransactionFetcherFuzzCrash01(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1161,7 +1155,7 @@ func TestTransactionFetcherFuzzCrash02(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1190,7 +1184,7 @@ func TestTransactionFetcherFuzzCrash03(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error { return nil },
@@ -1223,7 +1217,7 @@ func TestTransactionFetcherFuzzCrash04(t *testing.T) {
 		init: func() *TxFetcher {
 			return NewTxFetcher(
 				func(common.Hash) bool { return false },
-				func(txs []*types.Transaction) []error {
+				func(txs []*txpool.Transaction) []error {
 					return make([]error, len(txs))
 				},
 				func(string, []common.Hash) error {

@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -90,7 +91,7 @@ func WriteArchive(name string, files []string) (err error) {
 	}()
 	archive, basename := NewArchive(archfd)
 	if archive == nil {
-		return fmt.Errorf("unknown archive extension")
+		return errors.New("unknown archive extension")
 	}
 	fmt.Println(name)
 	if err := archive.Directory(basename); err != nil {
@@ -158,7 +159,7 @@ func (a *TarballArchive) Directory(name string) error {
 	a.dir = name + "/"
 	return a.tarw.WriteHeader(&tar.Header{
 		Name:     a.dir,
-		Mode:     0o755,
+		Mode:     0755,
 		Typeflag: tar.TypeDir,
 		ModTime:  time.Now(),
 	})
@@ -272,7 +273,7 @@ func extractFile(arpath string, armode os.FileMode, data io.Reader, dest string)
 	}
 
 	// Ensure the destination directory exists.
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 		return err
 	}
 

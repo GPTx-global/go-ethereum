@@ -44,6 +44,11 @@ func NewStack() (*Stack, error) {
 	return stack, nil
 }
 
+func Newstack() *Stack {
+	stack, _ := stackPool.Get().(*Stack)
+	return stack
+}
+
 func (st *Stack) Push(d *uint256.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	st.Data = append(st.Data, *d)
