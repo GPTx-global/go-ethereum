@@ -146,6 +146,21 @@ type Message struct {
 	SkipAccountChecks bool
 }
 
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList types.AccessList, isFake bool) Message {
+	return Message{
+		From:       from,
+		To:         to,
+		Nonce:      nonce,
+		Value:      amount,
+		GasLimit:   gasLimit,
+		GasPrice:   gasPrice,
+		GasFeeCap:  gasFeeCap,
+		GasTipCap:  gasTipCap,
+		Data:       data,
+		AccessList: accessList,
+	}
+}
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
